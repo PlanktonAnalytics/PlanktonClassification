@@ -14,6 +14,8 @@ DNN_preSort.py offers a basic classification engine using the CopNonDetritus_423
 A MAC laptop (2016 i7) runs the model and sorts the images in the predefined day sample/10-minute folder structure at a rate of about 30 images per second.
 Each image has area and maj/min parameters extracted and saved to ./desc/DNN_reults.csv file
 
+Phil Culverhouse
+
 
 PUBLICATIONS
 1. Pitois SG, et al. (2021) A first approach to build and test the Copepod Mean Size and Total Abundance (CMSTA) ecological indicator using in-situ size measurements from the Plankton Imager (PI). Ecological Indicators 123 (2021) 107307. https://doi.org/10.1016/j.ecolind.2020.107307
