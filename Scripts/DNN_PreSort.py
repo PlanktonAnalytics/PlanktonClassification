@@ -206,7 +206,7 @@ def Create_CSV(folder):
     CSVwriter = csv.writer(CSVfile)
     CSVwriter.writerow([modelname]) # audit trail save the model
     
-    headers=['Fname' , 'Class','Copepoda_(p)','NONCopepoda_(p)','Detritus_(p)', 'Area', 'Major', 'Minor']
+    headers=['Fname' , 'Class','Copepoda_(p)','Detritus_(p)','NONCopepoda_(p)', 'Area', 'Major', 'Minor']
     CSVwriter.writerow(headers)
     return CSVfile, CSVwriter #so we can close it
     
