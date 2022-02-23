@@ -41,9 +41,11 @@ pip install torchvision
 
 pip install openvino
 
-For (B) you only need to install OpenVino inference engine
+For (B) you only need to install OpenVino inference engine, but also opencv_python as a number of imaging functions use that library
 
 pip install openvino
+
+pip install opencv-python
 
 
 
