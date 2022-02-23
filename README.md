@@ -23,7 +23,7 @@ PUBLICATIONS
 3. Scott J, et al.  (2021) In situ automated imaging, using the Plankton Imager, captures temporal variations in mesozooplankton using the Celtic Sea as a case study. J. Plankton Research. https://doi.org/10.1093/plankt/fbab018.
 
 
-INSTALLATION DETAILS
+<b>INSTALLATION DETAILS</b>
 
 There are two levels of operation available:
 A) Using OpenVino to convert DNN models into ONNX and optimise the network for inference use, 
