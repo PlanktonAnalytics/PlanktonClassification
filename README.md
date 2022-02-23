@@ -36,6 +36,7 @@ B) Using OpenVino just to load an optimised model and run inferences on data, us
 For (A) you need to install the Torch libraries
 
 pip install torch
+
 pip install torchvision
 
 For (B) you only need to install OpenVino inference engine
