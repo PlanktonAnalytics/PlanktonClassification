@@ -21,3 +21,27 @@ PUBLICATIONS
 1. Pitois SG, et al. (2021) A first approach to build and test the Copepod Mean Size and Total Abundance (CMSTA) ecological indicator using in-situ size measurements from the Plankton Imager (PI). Ecological Indicators 123 (2021) 107307. https://doi.org/10.1016/j.ecolind.2020.107307
 2. Pitois SG, et al. (2018). Comparison of a cost-effective integrated plankton sampling and imaging instrument with traditional systems for mesozooplankton sampling in the Celtic Sea. Front. Mar. Sci. 5, 5. https://doi.org/10.3389/fmars.2018.00005
 3. Scott J, et al.  (2021) In situ automated imaging, using the Plankton Imager, captures temporal variations in mesozooplankton using the Celtic Sea as a case study. J. Plankton Research. https://doi.org/10.1093/plankt/fbab018.
+
+
+INSTALLATION DETAILS
+
+There are two levels of operation available:
+A) Using OpenVino to convert DNN models into ONNX and optimise the network for inference use, 
+  allows TorchExport.py to run. 
+   See https://pypi.org/project/torch/ and https://pypi.org/project/torchvision/
+   
+B) Using OpenVino just to load an optimised model and run inferences on data, using DNN_PreSort.py.
+   See https://pypi.org/project/openvino/
+
+For (A) you need to install the Torch libraries
+
+pip install torch
+pip install torchvision
+
+For (B) you only need to install OpenVino inference engine
+
+pip install openvino
+
+
+
+
