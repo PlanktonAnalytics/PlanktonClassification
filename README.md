@@ -33,11 +33,13 @@ A) Using OpenVino to convert DNN models into ONNX and optimise the network for i
 B) Using OpenVino just to load an optimised model and run inferences on data, using DNN_PreSort.py.
    See https://pypi.org/project/openvino/
 
-For (A) you need to install the Torch libraries
+For (A) you need to install the Torch libraries and OpenVino
 
 pip install torch
 
 pip install torchvision
+
+pip install openvino
 
 For (B) you only need to install OpenVino inference engine
 
