@@ -45,6 +45,8 @@ For (B) you only need to install OpenVino inference engine, but also opencv_pyth
 
 pip install openvino
 
+pip install pillow
+
 pip install opencv-python
 
 
