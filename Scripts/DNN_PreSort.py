@@ -45,6 +45,9 @@ import xml.etree.ElementTree as ET
 #two alteratives for run time
 from openvino.inference_engine import IECore
 
+## globals
+global height
+global width
 
 ########## Manually set to location of folders for non-main() operation #####################
 SEP='/'
@@ -53,16 +56,16 @@ if sys.platform == 'win32':
   SEP='\\'
   DIR='C:'
 
-INrootDIR=DIR + SEP + "openvino_optimised" + SEP + "data" + SEP + "rawdata" + SEP + ""
+#INrootDIR=DIR + SEP + "openvino_optimised" + SEP + "data" + SEP + "rawdata" + SEP + ""
 
 ######################### MODEL DETAILS #####################
 modelname="CopNonDetritus_42317_FP32" # DSG DEC 2021 model
 
-#labelstr="CopNonDetritus_42317_Labels.xml"
-labelstr="CopNonDetritus_42317_OpenCV_Labels.xml" ## PFC 2 ways of formatting XML, the OpenCV one is the easiest to port Python3/c++"
+labelstr="CopNonDetritus_42317_Labels.xml"
+#labelstr="CopNonDetritus_42317_OpenCV_Labels.xml" ## PFC 2 ways of formatting XML, the OpenCV one is the easiest to port Python3/c++"
 
 ########## CHANGE TO UPDATE MODEL LOCATION #################
-modelDIR= SEP + "openvino_optimised" + SEP + "models" + SEP + "Model-CEFAS-Pi-CopNonDetritus_42317" + SEP
+#modelDIR= SEP + "openvino_optimised" + SEP + "models" + SEP + "Model-CEFAS-Pi-CopNonDetritus_42317" + SEP
 ############################################################
 
 
@@ -74,61 +77,40 @@ modelDIR= SEP + "openvino_optimised" + SEP + "models" + SEP + "Model-CEFAS-Pi-Co
 
 #InputDIR= INrootDIR + target_directory + SEP ### now over written by main() below from arg list
 
-# ################ Use FP16 model ####################
-# note: could set this as cmd arg
-converted_model_path = "" + DIR+ modelDIR + modelname + ".xml"
-print(f'Model:{modelname}')
-#################### load model ######################
-# initialize inference engine
-ie_core = IECore()
-# read the network and corresponding weights from file
-net = ie_core.read_network(model=converted_model_path)
 
-# load the model on the CPU (you can choose manually CPU, GPU, MYRIAD etc.)
-# or let the engine choose best available device (AUTO)
-exec_net = ie_core.load_network(network=net, device_name="CPU")
-
-# get input and output names of nodes
-input_key = list(exec_net.input_info)[0]
-output_key = list(exec_net.outputs.keys())[0]
-#print (f'IN: {input_key}, OUT: {output_key}')
-
-# get input size
-height, width = exec_net.input_info[input_key].tensor_desc.dims[2:]
-#print (f'network input DIM: {height},{width}')
 
 ################## CLASSES used to train DNN model ########################
 ## note keep the orer the same as for the training regime ##
 
-#classes = [    "Copepoda", "Detritus", "NONCopepoda"]
+#classes = ["Copepoda", "Detritus", "NONCopepoda"]
 ## now read from the Labels.xml in the same location as the model
 def ReadLabels(path):
     
 # PFC USE EITHER XML FORMAT
 #    path="/Users/culverhouse/Code/openvino_optimised/models/DSG_DNN_PreSort_Model/CopNonDetritus_42317_Labels.xml"
-#    tree = ET.parse(path)
-#    root = tree.getroot()
-#    classes=[]
-#    for child in root:
-#        name = child.get('Class')
-#        classes.append(name)
-#    #print(f'ReadLabels:{Classes}')
-#    return(classes)
+    tree = ET.parse(path)
+    root = tree.getroot()
+    classes=[]
+    for child in root:
+        name = child.get('Class')
+        classes.append(name)
+    #print(f'ReadLabels:{Classes}')
+    return(classes)
     
 # PFC OR USE OPENCV FILESTORAGE FORMAT
 # use opencv filestorage class as its compatible with c++ & python
     #path="/Users/culverhouse/Code/openvino_optimised/models/Model-CEFAS-Pi-CopNonDetritus_42317/CopNonDetritus_42317_OpenCV_Labels.xml"
-    if os.path.exists(path):
-        fs = cv2.FileStorage(path, cv2.FILE_STORAGE_READ)
-        fn = fs.getNode("Labels")
-        Classes=[]
-        for i in range(fn.size()):
-            Classes.append(fn.at(i).string())
-        #print(f'ReadLabels:{Classes}')
-        return(Classes)
-    else:
-        print(f'Error: no Labels file:{path}')
-        exit (-2)
+#    if os.path.exists(path):
+#        fs = cv2.FileStorage(path, cv2.FILE_STORAGE_READ)
+#        fn = fs.getNode("Labels")
+#        Classes=[]
+#        for i in range(fn.size()):
+#            Classes.append(fn.at(i).string())
+#        #print(f'ReadLabels:{Classes}')
+#        return(Classes)
+#    else:
+#        print(f'Error: no Labels file:{path}')
+#        exit (-2)
             
 ################# Softmax() ########################
 # PFC from https://stackoverflow.com/questions/34968722/how-to-implement-the-softmax-function-in-python
@@ -139,10 +121,11 @@ def softmax(x):
     return e_x / e_x.sum(axis=0) # only difference
     
 ##################### CLASSIFY #####################
-def classify(imageC,classes):
+def classify(imageC,classes, width, height):
  
      # resize image and change dims to fit neural network input
      imageC=np.asarray(imageC) # make an array that resize can use
+     #print(f'{width},{height},{imageC.shape}')
      imageResized = cv2.resize(imageC, dsize=(width, height), interpolation=cv2.INTER_AREA)
      input_img=imageResized/255 #convert to float
 
@@ -240,7 +223,8 @@ def listdirs(folder):
          return []
          
 def usage():
-    print('-fp, --fpath xyz : set location of the sample, either ay or 10-min folder')
+    print('-d, --dpath xyz : set location of the sample, either day or 10-min folder')
+    print('-m, --mpath xyz : set location of the model')
     print('-s, --sort : sort classified images into Class folders')
     print('Creates ./Desc/DNN_Results.csv in each ten-minute folder')
     print('-h, --help : this message')
@@ -249,11 +233,30 @@ def usage():
 # assumes not much else in the folder structure
 # excepting std Plankton Imager files (and ZIP files for easy teset image storing
 # DNN_PreSort -fpath -sort
-def main():
 
+
+
+def main():
+    ## DNN engine vars must be global, but decl inside main()!!
+    global ie_core
+    global net
+    global exec_net
+    global input_key
+    global output_key
+    
+    # set GPS vars
+    DateTime=""
+    GPSLatitudeRef=""
+    GPSLatitude=""
+    GPSLongitudeRef=""
+    GPSLongitude=""
+    
+    
+    ModelDIR=""
+    InputDIR=""
     sort=False # set true by cmd
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "ho:v", ["help", "fpath=", "sort"])
+        opts, args = getopt.getopt(sys.argv[1:], "ho:v", ["help", "dpath=", "mpath=", "sort"])
     except getopt.GetoptError as err:
         # print help information and exit:
         print(err)  # will print something like "option -a not recognized"
@@ -267,48 +270,69 @@ def main():
         elif o in ("-h", "--help"):
             usage()
             sys.exit()
-        elif o in ("-fp", "--fpath"):
+        elif o in ("-d", "--dpath"):
             InputDIR = a
+        elif o in ("-m", "--mpath"):
+            ModelDIR = a
         elif o in ("-s", "--sort"):
             sort = True
         else:
             assert False, "unhandled option"
-  ##      print (f'Args:: {InputDIR}, {sort}')
-
+        #print (f'Args:: {InputDIR}, {ModelDIR}, {sort}')
+        
+    if not (os.path.exists(ModelDIR)):
+        assert False, "Cannot find model"
     
+    # ################ LOAD model ####################
+    # note: could set this as cmd arg
+    converted_model_path = ModelDIR + modelname + ".xml"
+    print(f'Model:{modelname}')
+    #################### load model ######################
+    # initialize inference engine
+
+    ie_core = IECore()
+    # read the network and corresponding weights from file
+    net = ie_core.read_network(model=converted_model_path)
+
+    # load the model on the CPU (you can choose manually CPU, GPU, MYRIAD etc.)
+    # or let the engine choose best available device (AUTO)
+    exec_net = ie_core.load_network(network=net, device_name="CPU")
+
+    # get input and output names of nodes
+    input_key = list(exec_net.input_info)[0]
+
+    output_key = list(exec_net.outputs.keys())[0]
+    #print (f'IN: {input_key}, OUT: {output_key}')
+
+    # get input size
+    height, width = exec_net.input_info[input_key].tensor_desc.dims[2:]
+    #print (f'network input DIM: {height},{width}')
+        
     # then classifying images
     # measure processing time
     start_time = time.time()
 
-    classes=ReadLabels(path = DIR + modelDIR + labelstr)
+    classes=ReadLabels(path = ModelDIR + labelstr)
     print(f'Classes: {classes}')
 
     Icount=0
     ten_min_folders=listdirs(InputDIR)
-    #print(f'ten_min_folders:{ten_min_folders}')
-    
-    # set GPS vars
-    DateTime=""
-    GPSLatitudeRef=""
-    GPSLatitude=""
-    GPSLongitudeRef=""
-    GPSLongitude=""
-    
+
     for folder_item in ten_min_folders:
     
         if SEP + 'Desc' in folder_item:
             print(f'Desc-Images removed {folder_item}')
             continue ## PFC there may be an Images folder in the Desc folder, skip it
     
-        images_folder=InputDIR + SEP  + folder_item + SEP + "Images" + SEP
+        images_folder=InputDIR  + folder_item + SEP + "Images" + SEP
         if not (os.path.exists(images_folder)):
             continue
             
-        Desc_folder=InputDIR + SEP  + folder_item + SEP + "Desc" + SEP
+        Desc_folder=InputDIR  + folder_item + SEP + "Desc" + SEP
         #print(f' csv results: {Desc_folder}')
 
         CSV_fd, CSVwriter = Create_CSV(Desc_folder) # create target CSV results file
-        shutil.copy2(DIR + modelDIR+labelstr , Desc_folder + labelstr) ## copy Labels.xml to target
+        shutil.copy2(ModelDIR+labelstr , Desc_folder + labelstr) ## copy Labels.xml to target
         
         files = os.listdir(images_folder)
         
@@ -391,7 +415,7 @@ def main():
             #        print ("Key: %s, value %s" % (tag, meta_dict[tag]))
                             
             props=GetPropsFromImage(imageC,file) # get maj/min axes etc
-            label,probs = classify(imageC,classes) #CLASSIFY
+            label,probs = classify(imageC,classes, width, height) #CLASSIFY
 
             #deal with probabilities --- could move this to the Classify function
             CSV_row=file, label, probs[0].round(4), probs[1].round(4),probs[2].round(4), round(props[0],4), round(props[1],4),round(props[2],4),\
