@@ -34,8 +34,10 @@ import getopt, sys # for cmd line parse
 
 import csv
 import numpy as np
+
 from PIL import Image # use for TIF read, as opencv is not always built with TIF library
-from PIL.TiffTags import TAGS # for metadata in the future
+#from PIL.TiffTags import TAGS # for metadata in the future
+import exifread ##pip install ExifRead
 
 import cv2
 import xml.etree.ElementTree as ET
@@ -53,13 +55,15 @@ if sys.platform == 'win32':
 
 INrootDIR=DIR + SEP + "openvino_optimised" + SEP + "data" + SEP + "rawdata" + SEP + ""
 
-#########################
-modelname="CopNonDetritus_42317_FP16" # DSG DEC 2021 model
+######################### MODEL DETAILS #####################
+modelname="CopNonDetritus_42317_FP32" # DSG DEC 2021 model
 
-labelstr="CopNonDetritus_42317_Labels.xml"
+#labelstr="CopNonDetritus_42317_Labels.xml"
+labelstr="CopNonDetritus_42317_OpenCV_Labels.xml" ## PFC 2 ways of formatting XML, the OpenCV one is the easiest to port Python3/c++"
 
+########## CHANGE TO UPDATE MODEL LOCATION #################
 modelDIR= SEP + "openvino_optimised" + SEP + "models" + SEP + "Model-CEFAS-Pi-CopNonDetritus_42317" + SEP
-#########################
+############################################################
 
 
 ##### add another below this to set your chosen folder to process, as you can see I have two,
@@ -73,7 +77,7 @@ modelDIR= SEP + "openvino_optimised" + SEP + "models" + SEP + "Model-CEFAS-Pi-Co
 # ################ Use FP16 model ####################
 # note: could set this as cmd arg
 converted_model_path = "" + DIR+ modelDIR + modelname + ".xml"
-
+print(f'Model:{modelname}')
 #################### load model ######################
 # initialize inference engine
 ie_core = IECore()
@@ -100,15 +104,32 @@ height, width = exec_net.input_info[input_key].tensor_desc.dims[2:]
 ## now read from the Labels.xml in the same location as the model
 def ReadLabels(path):
     
-    #/Users/culverhouse/Code/openvino_optimised/models/DSG_DNN_PreSort_Model/CopNonDetritus_42317_Labels.xml
-    tree = ET.parse(path)
-    root = tree.getroot()
-    classes=[]
-    for child in root:
-        name = child.get('Class')
-        classes.append(name)
-    return(classes)
-        
+# PFC USE EITHER XML FORMAT
+#    path="/Users/culverhouse/Code/openvino_optimised/models/DSG_DNN_PreSort_Model/CopNonDetritus_42317_Labels.xml"
+#    tree = ET.parse(path)
+#    root = tree.getroot()
+#    classes=[]
+#    for child in root:
+#        name = child.get('Class')
+#        classes.append(name)
+#    #print(f'ReadLabels:{Classes}')
+#    return(classes)
+    
+# PFC OR USE OPENCV FILESTORAGE FORMAT
+# use opencv filestorage class as its compatible with c++ & python
+    #path="/Users/culverhouse/Code/openvino_optimised/models/Model-CEFAS-Pi-CopNonDetritus_42317/CopNonDetritus_42317_OpenCV_Labels.xml"
+    if os.path.exists(path):
+        fs = cv2.FileStorage(path, cv2.FILE_STORAGE_READ)
+        fn = fs.getNode("Labels")
+        Classes=[]
+        for i in range(fn.size()):
+            Classes.append(fn.at(i).string())
+        #print(f'ReadLabels:{Classes}')
+        return(Classes)
+    else:
+        print(f'Error: no Labels file:{path}')
+        exit (-2)
+            
 ################# Softmax() ########################
 # PFC from https://stackoverflow.com/questions/34968722/how-to-implement-the-softmax-function-in-python
 # PFC need to figure how to do this insie the ONNX model
@@ -143,7 +164,7 @@ def classify(imageC,classes):
      
 ############## measure image for area and fit ellipse ##################
 
-def GetPropsFromImage(imageC):
+def GetPropsFromImage(imageC, Fname):
     imgGray = imageC.convert('L')
     img_UINT8 = np.uint8(np.abs(imgGray))
     img_UINT8 = 255-img_UINT8
@@ -169,9 +190,9 @@ def GetPropsFromImage(imageC):
         #cv2.waitKey(0)
 
     # draw ellipse
-    #drawing = Ithr.copy()
-    #cv2.ellipse(drawing, ellipse, (0, 255, 0), 3)
-    #cv2.imshow('Contours', drawing)
+    #drawing = np.array(imageC)
+    #cv2.ellipse(drawing, ellipse, (0, 255, 0), 1)
+    #cv2.imshow(Fname, drawing)
     #cv2.waitKey(0)
     
     return([area, d1, d2])
@@ -196,7 +217,8 @@ def GetPropsFromImage(imageC):
          # #print(f'{filename} : {probabilities} : {labels[preds[0]]}') # get probabilities!!
      # return(labels[preds[0]],probabilities)
 
-# save P-values in CSV file in the rawdata folder, so PI_Label() can run to sort & scalebar images
+# save P-values in CSV file in the rawdata folder, so PI_ScaleBar() c++ can convert to
+
 # have one CSV file for each 10-minute folder
 def Create_CSV(folder):
     os.makedirs(folder, exist_ok=True)
@@ -206,8 +228,8 @@ def Create_CSV(folder):
     CSVwriter = csv.writer(CSVfile)
     CSVwriter.writerow([modelname]) # audit trail save the model
     
-    headers=['Fname' , 'Class','Copepoda_(p)','Detritus_(p)','NONCopepoda_(p)', 'Area', 'Major', 'Minor']
-    CSVwriter.writerow(headers)
+    headers=['Fname' , 'Class','Copepoda_(p)','Detritus_(p)','NONCopepoda_(p)', 'Area', 'Major', 'Minor', 'DateTime','GPSLatitudeRef','GPSLatitude','GPSLongitudeRef','GPSLongitude']
+    CSVwriter.writerow(headers),
     return CSVfile, CSVwriter #so we can close it
     
 #### check if folder exists, list it
@@ -220,6 +242,7 @@ def listdirs(folder):
 def usage():
     print('-fp, --fpath xyz : set location of the sample, either ay or 10-min folder')
     print('-s, --sort : sort classified images into Class folders')
+    print('Creates ./Desc/DNN_Results.csv in each ten-minute folder')
     print('-h, --help : this message')
     
 ###### MAIN runs through the folder hierarchy fining 10-minute folders with "/Images" subfolder
@@ -259,13 +282,28 @@ def main():
 
     classes=ReadLabels(path = DIR + modelDIR + labelstr)
     print(f'Classes: {classes}')
+
     Icount=0
     ten_min_folders=listdirs(InputDIR)
     #print(f'ten_min_folders:{ten_min_folders}')
     
+    # set GPS vars
+    DateTime=""
+    GPSLatitudeRef=""
+    GPSLatitude=""
+    GPSLongitudeRef=""
+    GPSLongitude=""
+    
     for folder_item in ten_min_folders:
     
+        if SEP + 'Desc' in folder_item:
+            print(f'Desc-Images removed {folder_item}')
+            continue ## PFC there may be an Images folder in the Desc folder, skip it
+    
         images_folder=InputDIR + SEP  + folder_item + SEP + "Images" + SEP
+        if not (os.path.exists(images_folder)):
+            continue
+            
         Desc_folder=InputDIR + SEP  + folder_item + SEP + "Desc" + SEP
         #print(f' csv results: {Desc_folder}')
 
@@ -298,6 +336,8 @@ def main():
                 continue
             if 'Images.zip' in file: ## skip for moment, reorganise format later
                 continue
+            if 'RawImages.zip' in file: ## skip for moment, reorganise format later
+                continue
                 
             Fpath = images_folder + file # full path name for an image
 
@@ -305,20 +345,57 @@ def main():
             # filter for images in directory, if not  #### IMPORTANT
             #if (SEP + 'Images') in Fpath:
             imageC =  Image.open(Fpath)
-# TODO PFC metadata
-#                    meta_dict = {TAGS[key] : imageC.tag[key] for key in imageC.tag_v2}
-#                    # Print the tag/ value pairs
-#                    # Print the tag/ value pairs
-#                    for tag in meta_dict:
-#                         ##if tag not in ('GPSInfoIFD', 'DateTime', 'Document', 'ImageDescription', 'EXIF MakerNote'):
-#                         if tag not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote'):
-                        #print ("Key: %s, value %s" % (tag, meta_dict[tag]))
-            props=GetPropsFromImage(imageC) # get maj/min axes etc
+            #imageC = np.array(imageC)
+## do nothing with the tagfs at present, just know how to read them.
+            with open(Fpath, 'rb') as imgTAGS:
+                tags = exifread.process_file(imgTAGS)
+            #print(f'Tags: {tags}')
+            for tag in tags.keys():
+                if tag not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote'):
+                    #print ("Key: %s, value %s" % {tag, tags[tag])
+                    #print(f'Key: {tag}, = {tags[tag]}')
+                    if tag in 'Image DateTime':
+                        DateTime=tags[tag]
+                        #print(f'{DateTime}')
+                        continue
+                    if tag in 'GPS GPSLatitude':
+                        GPSLatitude=tags[tag]
+                        #print(f'{GPSLatitude}')
+                        continue
+                    if tag in 'GPS GPSLatitudeRef':
+                        GPSLatitudeRef=tags[tag]
+                        #print(f'{GPSLatitudeRef}')
+                        continue
+                    if tag in 'GPS GPSLongitude':
+                        GPSLongitude=tags[tag]
+                        #print(f'{GPSLongitude}')
+                        continue
+                    if tag in 'GPS GPSLongitudeRef':
+                        GPSLongitudeRef=tags[tag]
+                        #print(f'{GPSLongitudeRef}')
+                        continue
+            #print(f'{file}:{DateTime},{GPSLatitudeRef},{GPSLatitude},{GPSLongitudeRef},{GPSLongitude}')
+            # cannot use opencv as the Intel opencv binary libraries do not have TIF lib!!
+            #imageC =  cv2.imread(Fpath)
+            #cv2.imshow("test",imageC8)
+            #cv2.waitKey(0)
+                                    
 
+# TODO PFC metadata
+            #meta_dict = {TAGS[key] : imageC.tag[key] for key in imageC.tag_v2}
+                    # Print the tag/ value pairs
+#                    # Print the tag/ value pairs
+            #for tag in meta_dict:
+                 #if tag not in ('GPSInfoIFD', 'DateTime', 'Document', 'ImageDescription', 'EXIF MakerNote'):
+            #     if tag not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote'):
+            #        print ("Key: %s, value %s" % (tag, meta_dict[tag]))
+                            
+            props=GetPropsFromImage(imageC,file) # get maj/min axes etc
             label,probs = classify(imageC,classes) #CLASSIFY
 
             #deal with probabilities --- could move this to the Classify function
-            CSV_row=file, label, probs[0].round(4), probs[1].round(4),probs[2].round(4), round(props[0],4), round(props[1],4),round(props[2],4)
+            CSV_row=file, label, probs[0].round(4), probs[1].round(4),probs[2].round(4), round(props[0],4), round(props[1],4),round(props[2],4),\
+                    DateTime,GPSLatitudeRef,GPSLatitude,GPSLongitudeRef,GPSLongitude
             #print(f'CSV_ROW: {CSV_row}')
             # write a row to the csv file
             CSVwriter.writerow(CSV_row)
