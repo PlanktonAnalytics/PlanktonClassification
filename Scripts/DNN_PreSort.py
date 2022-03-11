@@ -69,16 +69,6 @@ labelstr="CopNonDetritus_42317_Labels.xml"
 ############################################################
 
 
-##### add another below this to set your chosen folder to process, as you can see I have two,
-##### comment out if not required
-#target_directory    = "2020_10_21-short"
-#target_directory    = "2020_10_21" ### 6 minutes with ONNX FP16 model
-#target_directory    = "CEnd-May-2021-Good_images"
-
-#InputDIR= INrootDIR + target_directory + SEP ### now over written by main() below from arg list
-
-
-
 ################## CLASSES used to train DNN model ########################
 ## note keep the orer the same as for the training regime ##
 
@@ -364,13 +354,10 @@ def main():
                 continue
                 
             Fpath = images_folder + file # full path name for an image
-
             #print(f'Images_folder:{images_folder}, FILE: {file}')
-            # filter for images in directory, if not  #### IMPORTANT
-            #if (SEP + 'Images') in Fpath:
+
             imageC =  Image.open(Fpath)
-            #imageC = np.array(imageC)
-## do nothing with the tagfs at present, just know how to read them.
+            
             with open(Fpath, 'rb') as imgTAGS:
                 tags = exifread.process_file(imgTAGS)
             #print(f'Tags: {tags}')
@@ -399,20 +386,7 @@ def main():
                         #print(f'{GPSLongitudeRef}')
                         continue
             #print(f'{file}:{DateTime},{GPSLatitudeRef},{GPSLatitude},{GPSLongitudeRef},{GPSLongitude}')
-            # cannot use opencv as the Intel opencv binary libraries do not have TIF lib!!
-            #imageC =  cv2.imread(Fpath)
-            #cv2.imshow("test",imageC8)
-            #cv2.waitKey(0)
-                                    
-
-# TODO PFC metadata
-            #meta_dict = {TAGS[key] : imageC.tag[key] for key in imageC.tag_v2}
-                    # Print the tag/ value pairs
-#                    # Print the tag/ value pairs
-            #for tag in meta_dict:
-                 #if tag not in ('GPSInfoIFD', 'DateTime', 'Document', 'ImageDescription', 'EXIF MakerNote'):
-            #     if tag not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote'):
-            #        print ("Key: %s, value %s" % (tag, meta_dict[tag]))
+            # cannot use opencv as the Intel openvino opencv binary libraries do not have TIF lib!!
                             
             props=GetPropsFromImage(imageC,file) # get maj/min axes etc
             label,probs = classify(imageC,classes, width, height) #CLASSIFY
@@ -443,7 +417,6 @@ def main():
                     target_folder = images_folder + SEP + 'Unknown' + SEP
                     shutil.move(images_folder + SEP + file,target_folder )
                     #print(f'{file} {label} -> sort to: {target_folder}')
-                    
                     
             Icount=Icount+1 # count each image
             
