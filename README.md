@@ -39,7 +39,7 @@ Classes: ['Copepoda', 'Detritus', 'NonCopepoda']
 
 Time:0.0273 Images:47
 
-and saves results to DNN_Results.csv in each 10-min folder subfolder Desc
+and saves results to DNN_Results.csv in each 10-min folder subfolder Desc. A example day's sample with one 10-min folder inside is included as 2020_10_21-short.zip
 
 
 <b>PUBLICATIONS</b>
