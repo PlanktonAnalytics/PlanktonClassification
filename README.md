@@ -8,7 +8,7 @@ See https://github.com/alan-turing-institute/plankton-dsg-challenge
 The images were collected using the Plankton Imager model 1 at a pixel resolution of 10 microns on board CEFAS RV Endeavour 2017-2020.
 
 Scripts:
-TorchExport.py reads a PyTorch (*.pth) model at 64bit double precision to Openvino (*.onnx) and reduced precision for faster classification
+TorchExport.py reads a PyTorch (*.pth) model at 64bit double precision to Openvino (*.onnx) and reduced precision for faster classification.
 DNN_preSort.py offers a basic classification engine using the CopNonDetritus_42317_FP16 model. The model is embedded in the script.
 
 A MAC laptop (2016 i7) runs the model and sorts the images in the predefined day sample/10-minute folder structure at a rate of about 30 images per second.
@@ -27,7 +27,7 @@ labelstr="CopNonDetritus_42317_Labels.xml"
 
 FIXED in the code, as these models are known to work.
 
-<b>EXAMPLE: python3 DNN_PreSort.py --dpath=/Users/culverhouse/Code/openvino_optimised/data/rawdata/2020_10_21-short/ --mpath=/users/culverhouse/Code/openvino_optimised/models/Model-CEFAS-Pi-CopNonDetritus_42317/</b>
+<b>EXAMPLE: python3 DNN_PreSort.py --dpath=./2020_10_21-short/ --mpath=../models/Model-CEFAS-Pi-CopNonDetritus_42317/</b>
 
 User MUST use the default path separator for linux/win10 as python attempts to add a '\' when hunting for folders... will crash!
 
