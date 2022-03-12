@@ -21,11 +21,11 @@ Now have to specify model location. Works on Day samples, but will skip 10-min f
 
 By default 
 
-modelname="CopNonDetritus_42317_FP32" # DSG DEC 2021 model, optimised by openVino by PFC. See https://zenodo.org/record/6124415#.YiRbMRMUXBn for models
+modelname="CopNonDetritus_42317_FP32" # DSG DEC 2021 model, optimised by openVino by PFC. See https://zenodo.org/record/6124415#.YiRbMRMUXBn for models.
 
 labelstr="CopNonDetritus_42317_Labels.xml"
 
-FIXED in the code, as these models are known to work.
+Note: these are FIXED in the code, as these models are known to work.
 
 <b>EXAMPLE: python3 DNN_PreSort.py --dpath=./2020_10_21-short/ --mpath=../models/Model-CEFAS-Pi-CopNonDetritus_42317/</b>
 
