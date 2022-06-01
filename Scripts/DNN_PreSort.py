@@ -13,13 +13,16 @@
 # ************* NOTE: the model location fixed in program SEE LINES 49-61 to set models ###############
 
 # call as
-# python3 DNN_preSort.py --fpath=PATH --sort
+# python3 ./models/Scripts/DNN_PreSort.py --dpath=./data/rawdata/2020_10_21-short/ --mpath=./models/Model-CEFAS-Pi-CopNonDetritus_42317/ --sort --label=True
 
 # [Fname, Class, p0, p1, p2, Area, Major, Minor]
 
-# Option to moves images into sorted folders (done by PI_Label() in c++)
-# call as
+# Option to moves images into sorted folders (done by PI_Label() in c++) use
+# --sort
 #
+# option to label each image with a TIF TAG use
+# --label=True
+
 # python DNN_PreSort.py -fpath abd_path_name -sort
 #
 ## Uses OpenVino https://docs.openvino.ai/latest/notebooks/401-object-detection-with-output.html
@@ -37,7 +40,7 @@ import numpy as np
 
 from PIL import Image # use for TIF read, as opencv is not always built with TIF library
 #from PIL.TiffTags import TAGS # for metadata in the future
-import exifread ##pip install ExifRead
+##import exifread ##pip install ExifRead
 
 import cv2
 import xml.etree.ElementTree as ET
@@ -169,6 +172,78 @@ def GetPropsFromImage(imageC, Fname):
     #cv2.waitKey(0)
     
     return([area, d1, d2])
+    
+############# TIFF META TAGS CODE #######################
+# uses tiftools --> pip install tifftools
+
+import tifftools
+def read_metadata(Fpath):
+    
+    im = Image.open(Fpath)
+    info = tifftools.read_tiff(Fpath) # get meta data
+    ##dump = tifftools.tiff_dump(Fpath,30)
+    # also read the structure and pul out TAG items
+    # for these tags
+    TAGS={'Fname':'empty','DocumentName':'empty', 'DateTime':'empty','GPSLatitudeRef':'empty',
+    'GPSLatitude':'empty','GPSLongitudeRef':'empty','GPSLongitude':'empty'}
+
+    TAGS['DateTime'] = info['ifds'][0] ['tags'].get(306) ['data'] # std TIF TAGS
+    
+    GPS=info['ifds'][0] ['tags'].get(34853)['ifds'] # GPS TAGS
+    
+    TAGS['GPSLatitudeRef'] = GPS[0][0]['tags'][1]['data']
+    TAGS['GPSLatitude'] = GPS[0][0]['tags'][2]['data']
+    TAGS['GPSLongitudeRef'] = GPS[0][0]['tags'][3]['data']
+    TAGS['GPSLongitude'] = GPS[0][0]['tags'][4]['data']
+
+    #im.close()
+    return(TAGS)
+
+
+# insert into TF META DATA the following tags
+# Object Class as 'ImageDescription'
+# 'DNN_PreSort: Model-CEFAS-Pi-CopNonDetritus_42317' as 'Software'
+# 'Plankton Analytics' as 'Make'
+# 'Pi-10' as 'Model'
+# 'Plankton Analytics PI_Imager v1.0' as 'Artist'
+
+def update_metadata(TEMP_FILE, Fpath, Class):
+    
+    im = Image.open(Fpath)
+    info = tifftools.read_tiff(Fpath) # get meta data
+
+    # get TAG stuff that is important from TIF image file.
+    BIGENDIAN=info['bigEndian']
+    BIGTIFF=info['bigtiff']
+
+#Classification
+    info['ifds'][0]['tags'][tifftools.Tag.ImageDescription.value] = {
+    'data': Class,
+    'datatype': tifftools.Datatype.ASCII }
+    
+#Classifier details
+    info['ifds'][0]['tags'][tifftools.Tag.Software.value] = {
+    'data': 'DNN_PreSort: Model-CEFAS-Pi-CopNonDetritus_42317',
+    'datatype': tifftools.Datatype.ASCII }
+
+# Instrument details
+#    info['ifds'][0]['tags'][tifftools.Tag.Make.value] = {
+#    'data': 'Plankton Analytics',
+#    'datatype': tifftools.Datatype.ASCII }
+#
+#    info['ifds'][0]['tags'][tifftools.Tag.Model.value] = {
+#    'data': 'Pi-10',
+#    'datatype': tifftools.Datatype.ASCII }
+# unsure about this one
+    info['ifds'][0]['tags'][tifftools.Tag.Artist.value] = {
+    'data': 'Plankton Analytics PI_Imager v1.0', ## Could have Labeller here
+    'datatype': tifftools.Datatype.ASCII }
+
+    tifftools.write_tiff(info, TEMP_FILE, BIGENDIAN, BIGTIFF, allowExisting=True)
+    os.rename(TEMP_FILE, Fpath)
+    #im.close()
+
+
 
 # ## my old code PyTorch code ##########################
      # # Convert Image to tensor and resize it
@@ -216,13 +291,16 @@ def usage():
     print('-d, --dpath xyz : set location of the sample, either day or 10-min folder')
     print('-m, --mpath xyz : set location of the model')
     print('-s, --sort : sort classified images into Class folders')
-    print('Creates ./Desc/DNN_Results.csv in each ten-minute folder')
+    print('-l, --label : label the original TIFF images with their Class label')
+    print('Creates ./Desc/DNN_Results.csv in each ten-minute folder of the DAYS sample')
     print('-h, --help : this message')
     
 ###### MAIN runs through the folder hierarchy fining 10-minute folders with "/Images" subfolder
 # assumes not much else in the folder structure
 # excepting std Plankton Imager files (and ZIP files for easy teset image storing
 # DNN_PreSort -fpath -sort
+
+## example python3 ./models/Scripts/DNN_PreSort.py --dpath=./data/rawdata/2020_10_21-short/ --mpath=./models/Model-CEFAS-Pi-CopNonDetritus_42317/ --sort --label=True
 
 
 
@@ -245,8 +323,10 @@ def main():
     ModelDIR=""
     InputDIR=""
     sort=False # set true by cmd
+    LABEL=False
+    
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "ho:v", ["help", "dpath=", "mpath=", "sort"])
+        opts, args = getopt.getopt(sys.argv[1:], "ho:v", ["help", "dpath=", "mpath=", "sort", "label"])
     except getopt.GetoptError as err:
         # print help information and exit:
         print(err)  # will print something like "option -a not recognized"
@@ -254,6 +334,7 @@ def main():
         sys.exit(2)
     output = None
     verbose = False
+
     for o, a in opts:
         if o == "-v":
             verbose = True
@@ -266,10 +347,14 @@ def main():
             ModelDIR = a
         elif o in ("-s", "--sort"):
             sort = True
+        elif o in ("-l", "--label"):
+            LABEL = True
         else:
             assert False, "unhandled option"
         #print (f'Args:: {InputDIR}, {ModelDIR}, {sort}')
         
+    if not (os.path.exists(InputDIR)):
+        assert False, "Cannot find data"
     if not (os.path.exists(ModelDIR)):
         assert False, "Cannot find model"
     
@@ -318,6 +403,8 @@ def main():
         if not (os.path.exists(images_folder)):
             continue
             
+        TEMP_FILE = images_folder + SEP + 'TEMP.tif' # used for tiff_write()
+            
         Desc_folder=InputDIR  + folder_item + SEP + "Desc" + SEP
         #print(f' csv results: {Desc_folder}')
 
@@ -356,40 +443,22 @@ def main():
             Fpath = images_folder + file # full path name for an image
             #print(f'Images_folder:{images_folder}, FILE: {file}')
 
+            # cannot use opencv as the Intel openvino opencv binary libraries do not have TIF lib!!
             imageC =  Image.open(Fpath)
             
-            with open(Fpath, 'rb') as imgTAGS:
-                tags = exifread.process_file(imgTAGS)
-            #print(f'Tags: {tags}')
-            for tag in tags.keys():
-                if tag not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote'):
-                    #print ("Key: %s, value %s" % {tag, tags[tag])
-                    #print(f'Key: {tag}, = {tags[tag]}')
-                    if tag in 'Image DateTime':
-                        DateTime=tags[tag]
-                        #print(f'{DateTime}')
-                        continue
-                    if tag in 'GPS GPSLatitude':
-                        GPSLatitude=tags[tag]
-                        #print(f'{GPSLatitude}')
-                        continue
-                    if tag in 'GPS GPSLatitudeRef':
-                        GPSLatitudeRef=tags[tag]
-                        #print(f'{GPSLatitudeRef}')
-                        continue
-                    if tag in 'GPS GPSLongitude':
-                        GPSLongitude=tags[tag]
-                        #print(f'{GPSLongitude}')
-                        continue
-                    if tag in 'GPS GPSLongitudeRef':
-                        GPSLongitudeRef=tags[tag]
-                        #print(f'{GPSLongitudeRef}')
-                        continue
-            #print(f'{file}:{DateTime},{GPSLatitudeRef},{GPSLatitude},{GPSLongitudeRef},{GPSLongitude}')
-            # cannot use opencv as the Intel openvino opencv binary libraries do not have TIF lib!!
-                            
+            TAGS = read_metadata(Fpath) # now uses TIFTOOLS for TAG operations
+            #print(f'TAGS:{read_metadata(Fpath)}')
+            DateTime = TAGS['DateTime']
+            GPSLatitudeRef = TAGS['GPSLatitudeRef']
+            GPSLatitude=TAGS['GPSLatitude']
+            GPSLongitudeRef=TAGS['GPSLongitudeRef']
+            GPSLongitude=TAGS['GPSLongitude']
+        
             props=GetPropsFromImage(imageC,file) # get maj/min axes etc
             label,probs = classify(imageC,classes, width, height) #CLASSIFY
+            
+            if LABEL==True:
+                update_metadata(TEMP_FILE, Fpath, label) # & update TIF with Class label etc.
 
             #deal with probabilities --- could move this to the Classify function
             CSV_row=file, label, probs[0].round(4), probs[1].round(4),probs[2].round(4), round(props[0],4), round(props[1],4),round(props[2],4),\
