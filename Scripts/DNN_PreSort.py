@@ -13,7 +13,7 @@
 # ************* NOTE: the model location fixed in program SEE LINES 49-61 to set models ###############
 
 # call as
-# python3 ./models/Scripts/DNN_PreSort.py --dpath=./data/rawdata/2020_10_21-short/ --mpath=./models/Model-CEFAS-Pi-CopNonDetritus_42317/ --sort --label=True
+# python3 ./models/Scripts/DNN_PreSort.py --dpath=./data/rawdata/2020_10_21-short/ --mpath=./models/Model-CEFAS-Pi-CopNonDetritus_42317/ --sort --label
 
 # [Fname, Class, p0, p1, p2, Area, Major, Minor]
 
