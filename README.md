@@ -25,9 +25,9 @@ modelname="CopNonDetritus_42317_FP32" # DSG DEC 2021 model, optimised by openVin
 
 labelstr="CopNonDetritus_42317_Labels.xml"
 
-Note: these are FIXED in the code, as these models are known to work.
+Note: these models are known to work.
 
-<b>EXAMPLE: python3 DNN_PreSort.py --dpath=./data/2020_10_21-short/ --mpath=./models/Model-CEFAS-Pi-CopNonDetritus_42317/</b>
+<b>EXAMPLE: python3 DNN_PreSort.py --dpath=./data/2020_10_21-short/ --mpath=./models/Model-CEFAS-Pi-CopNonDetritus_42317/ --sort --label=True </b>
 
 User MUST use the default path separator for linux/win10 as python attempts to add a '\\' when hunting for folders... will crash!
 
