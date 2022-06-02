@@ -14,7 +14,7 @@ DNN_preSort.py offers a basic classification engine using the CopNonDetritus_423
 A MAC laptop (2016 i7) runs the model and sorts the images in the predefined day sample/10-minute folder structure at a rate of about 30 images per second.
 Each image has area and maj/min parameters, Date-Time and GPS coordinates extracted and saved to ./desc/DNN_reults.csv file
 
-Phil Culverhouse pculverhouse@planktonanalytics.com. See www.planktonanalytics.com also.
+Phil Culverhouse [email:pculverhouse@planktonanalytics.com, web: www.planktonanalytics.com].
 
 <b>Usage:</b>
 Now have to specify model location. Works on Day samples, but will skip 10-min folders that do not have an Images subfolder.
