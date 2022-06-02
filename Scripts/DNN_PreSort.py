@@ -13,15 +13,19 @@
 # ************* NOTE: the model location fixed in program SEE LINES 49-61 to set models ###############
 
 # call as
-# python3 ./models/Scripts/DNN_PreSort.py --dpath=./data/rawdata/2020_10_21-short/ --mpath=./models/Model-CEFAS-Pi-CopNonDetritus_42317/ --sort --label
-
-# [Fname, Class, p0, p1, p2, Area, Major, Minor]
+# python3 ./models/Scripts/DNN_PreSort.py --dpath=./data/rawdata/2020_10_21-short/ --mpath=./models/Model-CEFAS-Pi-CopNonDetritus_42317/ --sort --label=True
 
 # Option to moves images into sorted folders (done by PI_Label() in c++) use
 # --sort
 #
 # option to label each image with a TIF TAG use
 # --label=True
+
+# outputs a DNN_Results.csv file in Desc folder with the ten-minute folder.
+# structure [Fname, Class, p0, p1, p2, Area, Major, Minor, GPS]
+# see example in repo.
+
+
 
 # python DNN_PreSort.py -fpath abd_path_name -sort
 #
@@ -78,16 +82,21 @@ labelstr="CopNonDetritus_42317_Labels.xml"
 #classes = ["Copepoda", "Detritus", "NONCopepoda"]
 ## now read from the Labels.xml in the same location as the model
 def ReadLabels(path):
-    
-# PFC USE EITHER XML FORMAT
-#    path="/Users/culverhouse/Code/openvino_optimised/models/DSG_DNN_PreSort_Model/CopNonDetritus_42317_Labels.xml"
-    tree = ET.parse(path)
-    root = tree.getroot()
+
     classes=[]
-    for child in root:
-        name = child.get('Class')
-        classes.append(name)
-    #print(f'ReadLabels:{Classes}')
+    try:
+    # PFC USE EITHER XML FORMAT
+    #    path="/Users/culverhouse/Code/openvino_optimised/models/DSG_DNN_PreSort_Model/CopNonDetritus_42317_Labels.xml"
+        tree = ET.parse(path)
+        root = tree.getroot()
+
+        for child in root:
+            name = child.get('Class')
+            classes.append(name)
+        #print(f'ReadLabels:{Classes}')
+    except:
+        print(f'Failed to find XML Labels {path}\n')
+        
     return(classes)
     
 # PFC OR USE OPENCV FILESTORAGE FORMAT
@@ -114,62 +123,75 @@ def softmax(x):
     return e_x / e_x.sum(axis=0) # only difference
     
 ##################### CLASSIFY #####################
-def classify(imageC,classes, width, height):
- 
-     # resize image and change dims to fit neural network input
-     imageC=np.asarray(imageC) # make an array that resize can use
-     #print(f'{width},{height},{imageC.shape}')
-     imageResized = cv2.resize(imageC, dsize=(width, height), interpolation=cv2.INTER_AREA)
-     input_img=imageResized/255 #convert to float
+def classify(imageC,classes, width, height, Fname):
 
-     
-     # create batch of images (size = 1)
-     input_img = np.expand_dims(input_img.transpose(2, 0, 1), 0)
+    try:
+         # resize image and change dims to fit neural network input
+         imageC=np.asarray(imageC) # make an array that resize can use
+         #print(f'{width},{height},{imageC.shape}')
+         imageResized = cv2.resize(imageC, dsize=(width, height), interpolation=cv2.INTER_AREA)
+         input_img=imageResized/255 #convert to float
 
-     # get results noramlly in openvino
-     results = exec_net.infer(inputs={input_key: input_img})[output_key]
-     result_index = np.argmax(results)
+         
+         # create batch of images (size = 1)
+         input_img = np.expand_dims(input_img.transpose(2, 0, 1), 0)
 
-     label = classes[np.argmax(results)]
-     #print (f'label:{label}')
-     results=results.tolist()
-     #print(f'{results[0]} -> {classes[result_index]}')
-    
-     probs=softmax(results[0])
-     return (label,probs)
+         # get results noramlly in openvino
+         results = exec_net.infer(inputs={input_key: input_img})[output_key]
+         result_index = np.argmax(results)
+
+         label = classes[np.argmax(results)]
+         #print (f'label:{label}')
+         results=results.tolist()
+         #print(f'{results[0]} -> {classes[result_index]}')
+        
+         probs=softmax(results[0])
+         return (label,probs)
+         
+    except:
+        print (f'Classifier failed for {Fname}\n')
+        print(f'PROBS: {probs}\n')
+        return (0,0)
      
 ############## measure image for area and fit ellipse ##################
 
 def GetPropsFromImage(imageC, Fname):
-    imgGray = imageC.convert('L')
-    img_UINT8 = np.uint8(np.abs(imgGray))
-    img_UINT8 = 255-img_UINT8
-    (T,Ithr)=cv2.threshold(img_UINT8, 0, 255, cv2.THRESH_OTSU)
-    
-    
-    # find largest contour
-    cnts  = cv2.findContours(Ithr, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cnts = cnts[0] if len(cnts) == 2 else cnts[1] # extract contours regardless of version!
-    biggest = max(cnts, key=cv2.contourArea)
-    area = cv2.contourArea(biggest)
-    
-    if (area >30):
-        # fit contour to ellipse and get ellipse center, minor and major diameters and angle in degree
-        ellipse = cv2.fitEllipse(biggest)
-        (xc,yc),(d1,d2),angle = ellipse
-        #print(xc,yc,d1,d1,angle)
-    else: # if too small just zero the parameters, coul in future move the image to the _smallitems folder??
-        area=0
-        d1=0
-        d2=0
-        #cv2.imshow('THR', Ithr)
-        #cv2.waitKey(0)
 
-    # draw ellipse
-    #drawing = np.array(imageC)
-    #cv2.ellipse(drawing, ellipse, (0, 255, 0), 1)
-    #cv2.imshow(Fname, drawing)
-    #cv2.waitKey(0)
+    area=0
+    d1=0
+    d2=0
+    
+    try:
+        imgGray = imageC.convert('L')
+        img_UINT8 = np.uint8(np.abs(imgGray))
+        img_UINT8 = 255-img_UINT8
+        (T,Ithr)=cv2.threshold(img_UINT8, 0, 255, cv2.THRESH_OTSU)
+        
+        # find largest contour
+        cnts  = cv2.findContours(Ithr, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnts = cnts[0] if len(cnts) == 2 else cnts[1] # extract contours regardless of version!
+        biggest = max(cnts, key=cv2.contourArea)
+        area = cv2.contourArea(biggest)
+        
+        if (area >30):
+            # fit contour to ellipse and get ellipse center, minor and major diameters and angle in degree
+            ellipse = cv2.fitEllipse(biggest)
+            (xc,yc),(d1,d2),angle = ellipse
+            #print(xc,yc,d1,d1,angle)
+        else: # if too small just zero the parameters, coul in future move the image to the _smallitems folder??
+            area=0
+            d1=0
+            d2=0
+            #cv2.imshow('THR', Ithr)
+            #cv2.waitKey(0)
+
+        # draw ellipse
+        #drawing = np.array(imageC)
+        #cv2.ellipse(drawing, ellipse, (0, 255, 0), 1)
+        #cv2.imshow(Fname, drawing)
+        #cv2.waitKey(0)
+    except:
+        print(f' Failed to find a contour in {Fname}\n')
     
     return([area, d1, d2])
     
@@ -179,23 +201,25 @@ def GetPropsFromImage(imageC, Fname):
 import tifftools
 def read_metadata(Fpath):
     
-    im = Image.open(Fpath)
-    info = tifftools.read_tiff(Fpath) # get meta data
-    ##dump = tifftools.tiff_dump(Fpath,30)
-    # also read the structure and pul out TAG items
-    # for these tags
     TAGS={'Fname':'empty','DocumentName':'empty', 'DateTime':'empty','GPSLatitudeRef':'empty',
     'GPSLatitude':'empty','GPSLongitudeRef':'empty','GPSLongitude':'empty'}
 
-    TAGS['DateTime'] = info['ifds'][0] ['tags'].get(306) ['data'] # std TIF TAGS
-    
-    GPS=info['ifds'][0] ['tags'].get(34853)['ifds'] # GPS TAGS
-    
-    TAGS['GPSLatitudeRef'] = GPS[0][0]['tags'][1]['data']
-    TAGS['GPSLatitude'] = GPS[0][0]['tags'][2]['data']
-    TAGS['GPSLongitudeRef'] = GPS[0][0]['tags'][3]['data']
-    TAGS['GPSLongitude'] = GPS[0][0]['tags'][4]['data']
-
+    try:
+        im = Image.open(Fpath)
+        info = tifftools.read_tiff(Fpath) # get meta data
+        ##dump = tifftools.tiff_dump(Fpath,30)
+        # also read the structure and pul out TAG items
+        # for these tags
+        TAGS['DateTime'] = info['ifds'][0] ['tags'].get(306) ['data'] # std TIF TAGS
+        
+        GPS=info['ifds'][0] ['tags'].get(34853)['ifds'] # GPS TAGS
+        
+        TAGS['GPSLatitudeRef'] = GPS[0][0]['tags'][1]['data']
+        TAGS['GPSLatitude'] = GPS[0][0]['tags'][2]['data']
+        TAGS['GPSLongitudeRef'] = GPS[0][0]['tags'][3]['data']
+        TAGS['GPSLongitude'] = GPS[0][0]['tags'][4]['data']
+    except:
+        print(f'reading TIFTAGS failed {Fpath}\n')
     #im.close()
     return(TAGS)
 
@@ -209,40 +233,42 @@ def read_metadata(Fpath):
 
 def update_metadata(TEMP_FILE, Fpath, Class):
     
-    im = Image.open(Fpath)
-    info = tifftools.read_tiff(Fpath) # get meta data
+    try:
+        im = Image.open(Fpath)
+        info = tifftools.read_tiff(Fpath) # get meta data
 
-    # get TAG stuff that is important from TIF image file.
-    BIGENDIAN=info['bigEndian']
-    BIGTIFF=info['bigtiff']
+        # get TAG stuff that is important from TIF image file.
+        BIGENDIAN=info['bigEndian']
+        BIGTIFF=info['bigtiff']
 
-#Classification
-    info['ifds'][0]['tags'][tifftools.Tag.ImageDescription.value] = {
-    'data': Class,
-    'datatype': tifftools.Datatype.ASCII }
-    
-#Classifier details
-    info['ifds'][0]['tags'][tifftools.Tag.Software.value] = {
-    'data': 'DNN_PreSort: Model-CEFAS-Pi-CopNonDetritus_42317',
-    'datatype': tifftools.Datatype.ASCII }
+    #Classification
+        info['ifds'][0]['tags'][tifftools.Tag.ImageDescription.value] = {
+        'data': Class,
+        'datatype': tifftools.Datatype.ASCII }
+        
+    #Classifier details
+        info['ifds'][0]['tags'][tifftools.Tag.Software.value] = {
+        'data': 'DNN_PreSort: Model-CEFAS-Pi-CopNonDetritus_42317',
+        'datatype': tifftools.Datatype.ASCII }
 
-# Instrument details
-#    info['ifds'][0]['tags'][tifftools.Tag.Make.value] = {
-#    'data': 'Plankton Analytics',
-#    'datatype': tifftools.Datatype.ASCII }
-#
-#    info['ifds'][0]['tags'][tifftools.Tag.Model.value] = {
-#    'data': 'Pi-10',
-#    'datatype': tifftools.Datatype.ASCII }
-# unsure about this one
-    info['ifds'][0]['tags'][tifftools.Tag.Artist.value] = {
-    'data': 'Plankton Analytics PI_Imager v1.0', ## Could have Labeller here
-    'datatype': tifftools.Datatype.ASCII }
+    # Instrument details
+    #    info['ifds'][0]['tags'][tifftools.Tag.Make.value] = {
+    #    'data': 'Plankton Analytics',
+    #    'datatype': tifftools.Datatype.ASCII }
+    #
+    #    info['ifds'][0]['tags'][tifftools.Tag.Model.value] = {
+    #    'data': 'Pi-10',
+    #    'datatype': tifftools.Datatype.ASCII }
+    # unsure about this one
+        info['ifds'][0]['tags'][tifftools.Tag.Artist.value] = {
+        'data': 'Plankton Analytics PI_Imager v1.0', ## Could have Labeller here
+        'datatype': tifftools.Datatype.ASCII }
 
-    tifftools.write_tiff(info, TEMP_FILE, BIGENDIAN, BIGTIFF, allowExisting=True)
-    os.rename(TEMP_FILE, Fpath)
-    #im.close()
-
+        tifftools.write_tiff(info, TEMP_FILE, BIGENDIAN, BIGTIFF, allowExisting=True)
+        os.rename(TEMP_FILE, Fpath)
+        #im.close()
+    except:
+        print(f'TIFTAG write failed for {Fpath}\n')
 
 
 # ## my old code PyTorch code ##########################
@@ -269,15 +295,20 @@ def update_metadata(TEMP_FILE, Fpath, Class):
 
 # have one CSV file for each 10-minute folder
 def Create_CSV(folder):
-    os.makedirs(folder, exist_ok=True)
-    csv_fileSTR=os.path.join(folder, "DNN_Results.csv")
-    #print(csv_fileSTR)
-    CSVfile = open(csv_fileSTR, 'w')
-    CSVwriter = csv.writer(CSVfile)
-    CSVwriter.writerow([modelname]) # audit trail save the model
-    
-    headers=['Fname' , 'Class','Copepoda_(p)','Detritus_(p)','NONCopepoda_(p)', 'Area', 'Major', 'Minor', 'DateTime','GPSLatitudeRef','GPSLatitude','GPSLongitudeRef','GPSLongitude']
-    CSVwriter.writerow(headers),
+
+    try:
+        os.makedirs(folder, exist_ok=True)
+        csv_fileSTR=os.path.join(folder, "DNN_Results.csv")
+        #print(csv_fileSTR)
+        CSVfile = open(csv_fileSTR, 'w')
+        CSVwriter = csv.writer(CSVfile)
+        CSVwriter.writerow([modelname]) # audit trail save the model
+        
+        headers=['Fname' , 'Class','Copepoda_(p)','Detritus_(p)','NONCopepoda_(p)', 'Area', 'Major', 'Minor', 'DateTime','GPSLatitudeRef','GPSLatitude','GPSLongitudeRef','GPSLongitude']
+        CSVwriter.writerow(headers),
+    except:
+        print(f'Failed to creeate DNN_results.csv in {folder}\n')
+        
     return CSVfile, CSVwriter #so we can close it
     
 #### check if folder exists, list it
@@ -305,6 +336,7 @@ def usage():
 
 
 def main():
+
     ## DNN engine vars must be global, but decl inside main()!!
     global ie_core
     global net
@@ -395,105 +427,116 @@ def main():
 
     for folder_item in ten_min_folders:
     
-        if SEP + 'Desc' in folder_item:
-            print(f'Desc-Images removed {folder_item}')
-            continue ## PFC there may be an Images folder in the Desc folder, skip it
-    
-        images_folder=InputDIR  + folder_item + SEP + "Images" + SEP
-        if not (os.path.exists(images_folder)):
-            continue
-            
-        TEMP_FILE = images_folder + SEP + 'TEMP.tif' # used for tiff_write()
-            
-        Desc_folder=InputDIR  + folder_item + SEP + "Desc" + SEP
-        #print(f' csv results: {Desc_folder}')
-
-        CSV_fd, CSVwriter = Create_CSV(Desc_folder) # create target CSV results file
-        shutil.copy2(ModelDIR+labelstr , Desc_folder + labelstr) ## copy Labels.xml to target
+        try:
         
-        files = os.listdir(images_folder)
+            if SEP + 'Desc' in folder_item:
+                print(f'Desc-Images removed {folder_item}')
+                continue ## PFC there may be an Images folder in the Desc folder, skip it
         
-        ####### create class folders in Images folder, so they can be scaled by a quick C++ program and
-        ####### moved to ScaledImages folder.
-        if (sort):
-            # mkdir for each class
-            for class_item in classes:
-                class_folder =images_folder + class_item
-                os.makedirs(class_folder, exist_ok=True)
-                #print(f'created {class_folder}')
+            images_folder=InputDIR  + folder_item + SEP + "Images" + SEP
+            if not (os.path.exists(images_folder)):
+                continue
                 
-            os.makedirs(images_folder + "Unknown", exist_ok=True) ## always have an catchall bin
+            TEMP_FILE = images_folder + SEP + 'TEMP.tif' # used for tiff_write()
+                
+            Desc_folder=InputDIR  + folder_item + SEP + "Desc" + SEP
+            #print(f' csv results: {Desc_folder}')
+
+            CSV_fd, CSVwriter = Create_CSV(Desc_folder) # create target CSV results file
+            shutil.copy2(ModelDIR+labelstr , Desc_folder + labelstr) ## copy Labels.xml to target
+            
+            files = os.listdir(images_folder)
+            
+            ####### create class folders in Images folder, so they can be scaled by a quick C++ program and
+            ####### moved to ScaledImages folder.
+            if (sort):
+                # mkdir for each class
+                for class_item in classes:
+                    class_folder =images_folder + class_item
+                    os.makedirs(class_folder, exist_ok=True)
+                    #print(f'created {class_folder}')
                     
-        
-        ### run through each 10-min folder, each image, classify and then sort (if required)
-        ####for root, dirs, files in os.walk(images_folder):
-        for file in files:
-
-            if '.DS_Store' in file: ## for OSX !! PFC
-                continue
-            if 'DNN_results.csv' in file: ## skip for moment, reorganise format later
-                continue
-            if 'Background.tif' in file: ## skip for moment, reorganise format later
-                continue
-            if 'Images.zip' in file: ## skip for moment, reorganise format later
-                continue
-            if 'RawImages.zip' in file: ## skip for moment, reorganise format later
-                continue
-                
-            Fpath = images_folder + file # full path name for an image
-            #print(f'Images_folder:{images_folder}, FILE: {file}')
-
-            # cannot use opencv as the Intel openvino opencv binary libraries do not have TIF lib!!
-            imageC =  Image.open(Fpath)
+                os.makedirs(images_folder + "Unknown", exist_ok=True) ## always have an catchall bin
+                        
             
-            TAGS = read_metadata(Fpath) # now uses TIFTOOLS for TAG operations
-            #print(f'TAGS:{read_metadata(Fpath)}')
-            DateTime = TAGS['DateTime']
-            GPSLatitudeRef = TAGS['GPSLatitudeRef']
-            GPSLatitude=TAGS['GPSLatitude']
-            GPSLongitudeRef=TAGS['GPSLongitudeRef']
-            GPSLongitude=TAGS['GPSLongitude']
-        
-            props=GetPropsFromImage(imageC,file) # get maj/min axes etc
-            label,probs = classify(imageC,classes, width, height) #CLASSIFY
-            
-            if LABEL==True:
-                update_metadata(TEMP_FILE, Fpath, label) # & update TIF with Class label etc.
+            ### run through each 10-min folder, each image, classify and then sort (if required)
+            ####for root, dirs, files in os.walk(images_folder):
+            for file in files:
 
-            #deal with probabilities --- could move this to the Classify function
-            CSV_row=file, label, probs[0].round(4), probs[1].round(4),probs[2].round(4), round(props[0],4), round(props[1],4),round(props[2],4),\
-                    DateTime,GPSLatitudeRef,GPSLatitude,GPSLongitudeRef,GPSLongitude
-            #print(f'CSV_ROW: {CSV_row}')
-            # write a row to the csv file
-            CSVwriter.writerow(CSV_row)
-            
-            if (sort): ##TODO PFC arrange to loop for length of classes list
-                # move as you go to Classes
-                
-                if (label == classes[0]):
-                    target_folder = images_folder + SEP + classes[0] + SEP
-                    shutil.move(images_folder + SEP + file,target_folder )
-                    #print(f'{file} {label} -> sort to: {target_folder}')
-                elif (label == classes[1]):
-                    target_folder = images_folder + SEP + classes[1] + SEP
-                    shutil.move(images_folder + SEP + file,target_folder )
-                    #print(f'{file} {label} -> sort to: {target_folder}')
-                elif (label == classes[2]):
-                    target_folder = images_folder + SEP + classes[2] + SEP
-                    shutil.move(images_folder + SEP + file,target_folder )
-                    #print(f'{file} {label} -> sort to: {target_folder}')
-                else:
-                    target_folder = images_folder + SEP + 'Unknown' + SEP
-                    shutil.move(images_folder + SEP + file,target_folder )
-                    #print(f'{file} {label} -> sort to: {target_folder}')
+                if '.DS_Store' in file: ## for OSX !! PFC
+                    continue
+                if 'DNN_results.csv' in file: ## skip for moment, reorganise format later
+                    continue
+                if 'Background.tif' in file: ## skip for moment, reorganise format later
+                    continue
+                if 'Images.zip' in file: ## skip for moment, reorganise format later
+                    continue
+                if 'RawImages.zip' in file: ## skip for moment, reorganise format later
+                    continue
                     
-            Icount=Icount+1 # count each image
+                Fpath = images_folder + file # full path name for an image
+                #print(f'Images_folder:{images_folder}, FILE: {file}')
+
+                # cannot use opencv as the Intel openvino opencv binary libraries do not have TIF lib!!
+                try:
+                    imageC =  Image.open(Fpath)
+                except:
+                    print(f' Could not open image in {Fpath}')
+                
+                TAGS = read_metadata(Fpath) # now uses TIFTOOLS for TAG operations
+                #print(f'TAGS:{read_metadata(Fpath)}')
+                DateTime = TAGS['DateTime']
+                GPSLatitudeRef = TAGS['GPSLatitudeRef']
+                GPSLatitude=TAGS['GPSLatitude']
+                GPSLongitudeRef=TAGS['GPSLongitudeRef']
+                GPSLongitude=TAGS['GPSLongitude']
             
-        CSV_fd.close() # o for each 10-min folder
+                props=GetPropsFromImage(imageC,file) # get maj/min axes etc
+                label,probs = classify(imageC,classes, width, height, Fpath) #CLASSIFY
+                
+                if LABEL==True:
+                    update_metadata(TEMP_FILE, Fpath, label) # & update TIF with Class label etc.
+
+                #deal with probabilities --- could move this to the Classify function
+                CSV_row=file, label, probs[0].round(4), probs[1].round(4),probs[2].round(4), round(props[0],4), round(props[1],4),round(props[2],4),\
+                        DateTime,GPSLatitudeRef,GPSLatitude,GPSLongitudeRef,GPSLongitude
+                #print(f'CSV_ROW: {CSV_row}')
+                # write a row to the csv file
+                CSVwriter.writerow(CSV_row)
+                
+                if (sort): ##TODO PFC arrange to loop for length of classes list
+                    # move as you go to Classes
+                    
+                    if (label == classes[0]):
+                        target_folder = images_folder + SEP + classes[0] + SEP
+                        shutil.move(images_folder + SEP + file,target_folder )
+                        #print(f'{file} {label} -> sort to: {target_folder}')
+                    elif (label == classes[1]):
+                        target_folder = images_folder + SEP + classes[1] + SEP
+                        shutil.move(images_folder + SEP + file,target_folder )
+                        #print(f'{file} {label} -> sort to: {target_folder}')
+                    elif (label == classes[2]):
+                        target_folder = images_folder + SEP + classes[2] + SEP
+                        shutil.move(images_folder + SEP + file,target_folder )
+                        #print(f'{file} {label} -> sort to: {target_folder}')
+                    else:
+                        target_folder = images_folder + SEP + 'Unknown' + SEP
+                        shutil.move(images_folder + SEP + file,target_folder )
+                        #print(f'{file} {label} -> sort to: {target_folder}')
+                        
+                Icount=Icount+1 # count each image
+                
+            CSV_fd.close() # o for each 10-min folder
+            
+        except:
+            print(f' Image BROKE: {folder_item} in {Fpath}\n')
     
     stop_time = time.time()
     total_time= ((stop_time-start_time)/60)
     print(f'Time:{round(total_time,4)} Images:{Icount}')
+
+        
+    
 
 ###########################################################
 if __name__ == "__main__":
