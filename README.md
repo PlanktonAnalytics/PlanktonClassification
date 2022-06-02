@@ -40,6 +40,10 @@ Classes: ['Copepoda', 'Detritus', 'NonCopepoda']
 Time:0.0273 Images:47
 
 and saves results to DNN_Results.csv in each 10-min folder subfolder Desc. A example day's sample with one 10-min folder inside is included as 2020_10_21-short.zip
+Note: if the TIFTAGS are missing GPS data the resultant spreadsheet row has this content:
+
+[ Pia1.2020-10-21.1807+N00458378_hc.tif	Detritus	0	0.9999	0.0001	450.5	5.516	134.5258	empty	empty	empty	empty	empty ]
+
 
 
 <b>PUBLICATIONS</b>
