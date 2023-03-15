@@ -50,6 +50,7 @@ FileBody=0
 while True:
     data, addr = sock.recvfrom(8192) # buffer size is 8192 bytes max size
     Hash,Field,Part,UniqueID,TotalParts,DataSize,TAG,pack1,pack2 = unpack('IHHLHHHcc', data[0:24])
+    print(f'{Hash},{Field},{Part},{UniqueID},{TotalParts},{DataSize},{TAG}')
     if (TAG==0): #case 0: #illegal, corrupted packet
         print(f'TAG==0, Corrupted packet, ignoring')
         
@@ -58,12 +59,12 @@ while True:
         Fpath_Head_Tail=os.path.split(Fpath+Fname)
         print(f'UniqueID: {UniqueID}')
         pathlib.Path(Fpath_Head_Tail[0]).mkdir(parents=True, exist_ok=True)
-        print("received message: %s" % Fname)
+        print("received Fname: %s" % Fname)
         TotalParts=TotalParts-1
     elif (TAG==2): # case 2: #TIFF header, fetch rest of image too
         # next is TIFF header
         # then TIFF data
-        print(f'TAG: {TAG}')
+        print(f'TiFheader: {TAG}')
         TiffHeader, addr = sock.recvfrom(8192)
         newFile.write(TiffHeader) ## DOESN'T work, TIFF file is not
         TotalParts=TotalParts-1
@@ -71,6 +72,7 @@ while True:
         newFile = open(Fpath+Fname, "wb+")
         while (TotalParts>0):
             FileBody, addr = sock.recvfrom(8192)
+            print(f'FileBody: {FileBody},TotalParts:{TotalParts}')
             # just assume one packet of data (only for small files
             newFile.write(FileBody)
             TotalParts=TotalParts-1
@@ -78,6 +80,7 @@ while True:
     elif (TAG==4):
         TotalParts=TotalParts-1
         newFile = open(Fpath+Fname, "wb+")
+        print(f'TifBody of {Fname}')
         while (TotalParts>0):
             TiffData , addr = sock.recvfrom(8192)
             newFile.write(TiffData) ## DOESN'T work, TIFF file is not readable as a TIF for some reason.
