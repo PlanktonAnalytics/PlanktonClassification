@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # PFC 15.03.23
 # for Pi_Imager format UDP data stream processing
 # see UserGuide/UDP-data-format.pdf
@@ -9,17 +11,59 @@ import os
 import pathlib # for creating filepaths
 
 
-UDP_IP = "127.0.0.1" # change to 192.168.0.255 for live running
+# UDP_IP = "127.0.0.1" # change to 192.168.0.255 for live running
+UDP_IP = "0.0.0.0" # All interfaces
+
 UDP_PORT = 5000
 
-Fpath="/Users/culverhouse/Desktop/SurveyData/"
+# Fpath="/Users/culverhouse/Desktop/SurveyData/"
+Fpath="survey-data/"
+
+
+def dump(byte_array):
+    hex_str = ''.join(['{:02x}'.format(b) for b in byte_array])
+    print(hex_str)
+
+
+# The 8-byte TIFF file header should contain the following
+# information:
+#
+# Bytes 0-1: The byte order used within the file. Legal values are:
+# "II" (4949.H) "MM" (4D4D.H). In the "II" format, byte order is
+# always from the least significant byte to the most significant byte,
+# for both 16-bit and 32-bit integers This is called little-endian
+# byte order. In the "MM" format, byte order is always from most
+# significant to least significant, for both 16-bit and 32-bit
+# integers. This is called big-endian byte order.
+#
+# Bytes 2-3: An arbitrary but carefully chosen number (42) that
+# further identifies the file as a TIFF file.The byte order depends on
+# the value of Bytes 0-1.
+#
+# Bytes 4-7: The offset (in bytes) of the first IFD. The directory may
+# be at any location in the file after the header but must begin on a
+# word boundary. In particular, an Image File Directory may follow the
+# image data it describes. Readers must follow the pointers wherever
+# they may lead.The term byte offset is always used in this document
+# to refer to a location with respect to the beginning of the TIFF
+# file. The first byte of the file has an offset of 0.
+
+
+def parse_tiff_header(byte_array):
+    # Check that the file starts with the correct byte order signature
+    if byte_array[:2] == b'II' or byte_array[:2] == b'MM':
+        print("Valid TIFF header.")
+        # TODO: Extract width and height
+    else:
+        print("Invalid TIFF header.")
+
 
 sock = socket.socket(socket.AF_INET, # Internet
                      socket.SOCK_DGRAM) # UDP
 sock.bind((UDP_IP, UDP_PORT))
 
 ## packet header structure
-## Bytes 
+## Bytes
 #  0-3 Hash:		unsigned 32 bit INT (checksum)
 #  4-5 FieldIDx:	unsigned 16 bit INT
 #  6-7 PartIdx:		unsigned 16 bit INT
@@ -53,21 +97,33 @@ while True:
     print(f'{Hash},{Field},{Part},{UniqueID},{TotalParts},{DataSize},{TAG}')
     if (TAG==0): #case 0: #illegal, corrupted packet
         print(f'TAG==0, Corrupted packet, ignoring')
-        
+
     elif (TAG==1): # case 1: #Fname
         Fname= data[24:].decode('ascii')
+        print("received Fname: %s" % Fname)
+
+        Fname = Fname.replace("\\", os.path.sep) # Convert Windows style paths to the host OS convention
+
         Fpath_Head_Tail=os.path.split(Fpath+Fname)
         print(f'UniqueID: {UniqueID}')
         pathlib.Path(Fpath_Head_Tail[0]).mkdir(parents=True, exist_ok=True)
-        print("received Fname: %s" % Fname)
+
         TotalParts=TotalParts-1
+
     elif (TAG==2): # case 2: #TIFF header, fetch rest of image too
         # next is TIFF header
         # then TIFF data
         print(f'TiFheader: {TAG}')
         TiffHeader, addr = sock.recvfrom(8192)
+
+        dump(TiffHeader)
+        parse_tiff_header(TiffHeader)
+
+        # These don't look like TIFF headers to me
+
         newFile.write(TiffHeader) ## DOESN'T work, TIFF file is not
         TotalParts=TotalParts-1
+
     elif (TAG==3): #case 3: #FileBody
         newFile = open(Fpath+Fname, "wb+")
         while (TotalParts>0):
@@ -76,7 +132,7 @@ while True:
             # just assume one packet of data (only for small files
             newFile.write(FileBody)
             TotalParts=TotalParts-1
-            
+
     elif (TAG==4):
         TotalParts=TotalParts-1
         newFile = open(Fpath+Fname, "wb+")
@@ -87,10 +143,8 @@ while True:
             TotalParts=TotalParts-1
     else :
         print(f'Unknown TAG: {TAG}')
-        
-    
+
+
 
 
 ## BUT need to track Unique ID to be in sequence else pack arrived out of order
-
-    
