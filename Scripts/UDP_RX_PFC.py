@@ -50,13 +50,48 @@ def dump(byte_array):
 
 
 def parse_tiff_header(byte_array):
-    # Check that the file starts with the correct byte order signature
-    if byte_array[:2] == b'II' or byte_array[:2] == b'MM':
-        print("Valid TIFF header.")
-        # TODO: Extract width and height
-    else:
-        print("Invalid TIFF header.")
+    dump(byte_array)
 
+    byte_order = False
+
+    # Check endianness
+
+    if byte_array[:2] == b'II':
+        byte_order = "little"
+
+    if byte_array[:2] == b'MM':
+        byte_order = "big"
+
+    if int.from_bytes(byte_array[2:4], byteorder=byte_order) != 42:
+        print("Invalid check bytes")
+
+    if byte_order:
+
+        print("Valid TIFF file header.")
+        # # Get the offset of the first IFD (Image File Directory)
+        # ifd_offset = int.from_bytes(byte_array[4:8], byteorder=byte_order)
+
+        # # Read the number of entries in the IFD
+        # num_entries = int.from_bytes(byte_array[ifd_offset:ifd_offset+2], byteorder=byte_order)
+
+        # # Loop through each IFD entry to find the width and height of the image
+        # for i in range(num_entries):
+
+        #     # Get the tag number of the IFD entry
+        #     tag = int.from_bytes(byte_array[ifd_offset+2+i*12:ifd_offset+4+i*12], byteorder=byte_order)
+
+        #     # Check if the tag corresponds to the width or height of the image
+        #     if tag == 256:  # Width tag
+        #         width = int.from_bytes(byte_array[ifd_offset+8+i*12:ifd_offset+12+i*12], byteorder=byte_order)
+        #     elif tag == 257:  # Height tag
+        #         height = int.from_bytes(byte_array[ifd_offset+8+i*12:ifd_offset+12+i*12], byteorder=byte_order)
+
+        # print(f"Width: {width}, Height: {height}")
+    else:
+        print("Invalid TIFF file header.")
+
+
+filenames =  ["" for x in range(2048)]
 
 sock = socket.socket(socket.AF_INET, # Internet
                      socket.SOCK_DGRAM) # UDP
@@ -93,13 +128,16 @@ TiffData=0
 FileBody=0
 while True:
     data, addr = sock.recvfrom(8192) # buffer size is 8192 bytes max size
+
     Hash,Field,Part,UniqueID,TotalParts,DataSize,TAG,pack1,pack2 = unpack('IHHLHHHcc', data[0:24])
+
     print(f'{Hash},{Field},{Part},{UniqueID},{TotalParts},{DataSize},{TAG}')
+
     if (TAG==0): #case 0: #illegal, corrupted packet
         print(f'TAG==0, Corrupted packet, ignoring')
 
     elif (TAG==1): # case 1: #Fname
-        Fname= data[24:].decode('ascii')
+        Fname= data[24:(DataSize+24)].decode('ascii')
         print("received Fname: %s" % Fname)
 
         Fname = Fname.replace("\\", os.path.sep) # Convert Windows style paths to the host OS convention
@@ -108,39 +146,55 @@ while True:
         print(f'UniqueID: {UniqueID}')
         pathlib.Path(Fpath_Head_Tail[0]).mkdir(parents=True, exist_ok=True)
 
-        TotalParts=TotalParts-1
+        filenames[Field] = Fpath+Fname
+
 
     elif (TAG==2): # case 2: #TIFF header, fetch rest of image too
         # next is TIFF header
         # then TIFF data
         print(f'TiFheader: {TAG}')
-        TiffHeader, addr = sock.recvfrom(8192)
+
+        TiffHeader = data[24:(DataSize+24)]
 
         dump(TiffHeader)
         parse_tiff_header(TiffHeader)
 
-        # These don't look like TIFF headers to me
+        filename = filenames[Field]
+        if filename != "":
+            newFile = open(filename, "wb+")
+            newFile.write(TiffHeader)
 
-        newFile.write(TiffHeader) ## DOESN'T work, TIFF file is not
-        TotalParts=TotalParts-1
+        if Part >= TotalParts - 1:
+            filenames[Field] = ""
 
     elif (TAG==3): #case 3: #FileBody
         newFile = open(Fpath+Fname, "wb+")
-        while (TotalParts>0):
-            FileBody, addr = sock.recvfrom(8192)
-            print(f'FileBody: {FileBody},TotalParts:{TotalParts}')
-            # just assume one packet of data (only for small files
+
+        FileBody = data[24:(DataSize+24)]
+        print(f'FileBody: {FileBody},TotalParts:{TotalParts}')
+
+        filename = filenames[Field]
+        if filename != "":
+            newFile = open(filename, "wb+")
             newFile.write(FileBody)
-            TotalParts=TotalParts-1
+
+        if Part >= TotalParts - 1:
+            filenames[Field] = ""
 
     elif (TAG==4):
         TotalParts=TotalParts-1
-        newFile = open(Fpath+Fname, "wb+")
         print(f'TifBody of {Fname}')
-        while (TotalParts>0):
-            TiffData , addr = sock.recvfrom(8192)
-            newFile.write(TiffData) ## DOESN'T work, TIFF file is not readable as a TIF for some reason.
-            TotalParts=TotalParts-1
+        TiffData = data[24:(DataSize+24)]
+
+        filename = filenames[Field]
+        if filename != "":
+            newFile = open(filename, "wb+")
+            newFile.write(TiffData)
+
+        if Part >= TotalParts - 1:
+            filenames[Field] = ""
+
+
     else :
         print(f'Unknown TAG: {TAG}')
 
