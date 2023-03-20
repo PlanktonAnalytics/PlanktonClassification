@@ -91,7 +91,18 @@ def parse_tiff_header(byte_array):
         print("Invalid TIFF file header.")
 
 
-filenames =  ["" for x in range(2048)]
+# Implement a naive ring buffer
+
+RING_SIZE = 2048
+
+filenames =  ["" for x in range(RING_SIZE)]
+
+buffers = [[0,1,2,3,4,5,6,7] for x in range(RING_SIZE)]
+
+counts = [0 for x in range(RING_SIZE)]
+
+unique_ids = [0 for x in range(RING_SIZE)]
+
 
 sock = socket.socket(socket.AF_INET, # Internet
                      socket.SOCK_DGRAM) # UDP
@@ -133,11 +144,31 @@ while True:
 
     print(f'{Hash},{Field},{Part},{UniqueID},{TotalParts},{DataSize},{TAG}')
 
+    buffer = data[24:(DataSize+24)]
+
+    if unique_ids[Field] != UniqueID :
+        unique_ids[Field] = UniqueID
+        counts[Field] = 0
+
+    buffers[Field][Part]  = buffer
+
+    counts[Field] += 1
+
+    if counts[Field] >= TotalParts:
+        filename = filenames[Field]
+        if filename != "":
+            newFile = open(filename, "wb+")
+            for i in range(1,TotalParts):
+                newFile.write(buffers[Field][i])
+
+
     if (TAG==0): #case 0: #illegal, corrupted packet
         print(f'TAG==0, Corrupted packet, ignoring')
 
     elif (TAG==1): # case 1: #Fname
-        Fname= data[24:(DataSize+24)].decode('ascii')
+
+        Fname= buffer.decode("ascii")
+
         print("received Fname: %s" % Fname)
 
         Fname = Fname.replace("\\", os.path.sep) # Convert Windows style paths to the host OS convention
@@ -149,51 +180,19 @@ while True:
         filenames[Field] = Fpath+Fname
 
 
-    elif (TAG==2): # case 2: #TIFF header, fetch rest of image too
-        # next is TIFF header
-        # then TIFF data
+
+    elif (TAG==2):
         print(f'TiFheader: {TAG}')
 
-        TiffHeader = data[24:(DataSize+24)]
+        dump(buffer)
+        parse_tiff_header(buffer)
 
-        dump(TiffHeader)
-        parse_tiff_header(TiffHeader)
+    elif (TAG==3):
+        print(f'FileBody: {TAG}')
 
-        filename = filenames[Field]
-        if filename != "":
-            newFile = open(filename, "wb+")
-            newFile.write(TiffHeader)
-
-        if Part >= TotalParts - 1:
-            filenames[Field] = ""
-
-    elif (TAG==3): #case 3: #FileBody
-        newFile = open(Fpath+Fname, "wb+")
-
-        FileBody = data[24:(DataSize+24)]
-        print(f'FileBody: {FileBody},TotalParts:{TotalParts}')
-
-        filename = filenames[Field]
-        if filename != "":
-            newFile = open(filename, "wb+")
-            newFile.write(FileBody)
-
-        if Part >= TotalParts - 1:
-            filenames[Field] = ""
 
     elif (TAG==4):
-        TotalParts=TotalParts-1
-        print(f'TifBody of {Fname}')
-        TiffData = data[24:(DataSize+24)]
-
-        filename = filenames[Field]
-        if filename != "":
-            newFile = open(filename, "wb+")
-            newFile.write(TiffData)
-
-        if Part >= TotalParts - 1:
-            filenames[Field] = ""
-
+         print(f'TiffBody: {TAG}')
 
     else :
         print(f'Unknown TAG: {TAG}')
