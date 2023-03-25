@@ -16,8 +16,8 @@ UDP_IP = "0.0.0.0" # All interfaces
 
 UDP_PORT = 5000
 
-# Fpath="/Users/culverhouse/Desktop/SurveyData/"
-Fpath="survey-data/"
+Fpath="/Users/culverhouse/Desktop/SurveyData/"
+#Fpath="survey-data/"
 
 pathlib.Path(Fpath).mkdir(parents=True, exist_ok=True) # create the file paths if necessary
 
@@ -29,7 +29,7 @@ filenames =  ["" for x in range(RING_SIZE)] # current mapping of fields to filen
 buffers = [[0,1,2,3,4,5,6,7] for x in range(RING_SIZE)] # data packets that may arrive out of order
 counts = [0 for x in range(RING_SIZE)] # number of packets received
 unique_ids = [0 for x in range(RING_SIZE)] # current mapping of field indices to unique ids
-
+TotalParts_field = [0 for x in range(RING_SIZE)] #PFC current mapping of field indices to TotalParts ids
 #
 
 sock = socket.socket(socket.AF_INET, # Internet
@@ -38,13 +38,13 @@ sock.bind((UDP_IP, UDP_PORT))
 
 # packet header structure
 # Bytes
-#  0-3 Hash:		unsigned 32 bit INT (checksum)
-#  4-5 FieldIDx:	unsigned 16 bit INT
-#  6-7 PartIdx:		unsigned 16 bit INT
-#  8-15 UniqueID:	unsigned 64 bit INT
-#  16-17 TotalParts:	unsigned 16 bit INT
-#  19-20 DataSize:	unsigned 16 bit INT
-#  20-21 TAG:		unsigned 16 bit INT [0: no tag;1: Name; 2: TiffIfd; 3: FileBody; 4: Tiff Image data]
+#  0-3 Hash:        unsigned 32 bit INT (checksum)
+#  4-5 FieldIDx:    unsigned 16 bit INT
+#  6-7 PartIdx:        unsigned 16 bit INT
+#  8-15 UniqueID:    unsigned 64 bit INT
+#  16-17 TotalParts:    unsigned 16 bit INT
+#  19-20 DataSize:    unsigned 16 bit INT
+#  20-21 TAG:        unsigned 16 bit INT [0: no tag;1: Name; 2: TiffIfd; 3: FileBody; 4: Tiff Image data]
 #  22-24 Packing bytes - normally zero
 
 # example
@@ -67,6 +67,7 @@ while True:
         unique_ids[Field] = UniqueID
         counts[Field] = 0
         buffers[Field] = [0,1,2,3,4,5,6,7]
+        TotalParts_field= TotalParts # PFC
 
     #
 
@@ -106,14 +107,15 @@ while True:
 
     counts[Field] += 1
 
-    if (counts[Field] > TotalParts): # All packets received
+    print(f"Counts: {counts[Field]}, TotalParts: {TotalParts_field} ...")
+        
+    if (counts[Field] >= TotalParts_field): # All packets received PFC changed to TotalParts_field
         filename = filenames[Field]
-
-        if not any([isinstance(buffers[Field][i], int) for i in range(0, TotalParts)]):
+        if not any([isinstance(buffers[Field][i], int) for i in range(0, TotalParts_field)]):
             # All packets intact
             if filename != "":
                 print(f"Writing {filename} ...")
                 f = open(filename, "wb+")
-                for i in range(1,TotalParts):
+                for i in range(1,TotalParts_field): #PFC changed to TotalParts_field
                     f.write(buffers[Field][i])
         buffers[Field] = [0,1,2,3,4,5,6,7] # Reset, allow GC
