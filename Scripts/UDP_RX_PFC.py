@@ -54,7 +54,7 @@ sock.bind((UDP_IP, UDP_PORT))
 
 
 while True:
-    data, addr = sock.recvfrom(8192) # buffer size is 8192 bytes max size
+    data, addr = sock.recvfrom(8 * 1024 + 24) # buffer size is 8192 bytes plus header
 
     Hash,Field,Part,UniqueID,TotalParts,DataSize,TAG,pack1,pack2 = unpack('IHHLHHHcc', data[0:24])
 
@@ -108,7 +108,7 @@ while True:
     counts[Field] += 1
 
     print(f"Counts: {counts[Field]}, TotalParts: {TotalParts_field} ...")
-        
+
     if (counts[Field] >= TotalParts_field): # All packets received PFC changed to TotalParts_field
         filename = filenames[Field]
         if not any([isinstance(buffers[Field][i], int) for i in range(0, TotalParts_field)]):
